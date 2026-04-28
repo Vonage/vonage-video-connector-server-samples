@@ -1,0 +1,8 @@
+[project]
+name = "pipecat_vonage_moondream_demo"
+version = "0.2.0"
+requires-python = "~=3.13.0"
+dependencies = [
+  "pipecat-ai[websockets-base,moondream,piper,vonage-video-connector] @ https://github.com/Vonage/pipecat/archive/refs/tags/v0.0.104.post1.tar.gz",
+  "transformers~=4.57.6",
+]
