@@ -1,0 +1,29 @@
+echo_server/vonage_video_echo_server.py
+  s_015fd10c041f16::t_d0b6c3800b8164 70
+  s_015fd10c041f16::t_4fd0d9186806e6 192-194
+  s_015fd10c041f16::t_8e4c211b39a69f 171-174
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "8f80554632e9f3fae1cacafb13ae608b0850dfe6",
+  "prompts": {},
+  "humans": {
+    "h_28235619bd7317": {
+      "author": "adidomenico <alessio.didomenico@vonage.com>"
+    },
+    "h_c15c9c4b5d97b3": {
+      "author": "adidomenico"
+    }
+  },
+  "sessions": {
+    "s_015fd10c041f16": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_19669405dffew0AmAwM9LbzrjY",
+        "model": "claude-sonnet-4.6"
+      },
+      "human_author": "adidomenico <alessio.didomenico@vonage.com>"
+    }
+  }
+}
