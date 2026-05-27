@@ -67,6 +67,7 @@ class VonageVideoEchoServer:
         self.video_queue: queue.Queue[VideoFrame] = queue.Queue()
 
         self.is_publishing: bool = False
+        self._subscribed_stream_id: Optional[str] = None
 
         # Build settings
         audio_settings = SessionAudioSettings(sample_rate=48000, number_of_channels=1)
@@ -167,6 +168,10 @@ class VonageVideoEchoServer:
 
     def on_stream_received(self, session: Session, stream: Stream) -> None:
         logger.info("Stream received: session_id=%s stream_id=%s", session.id, stream.id)
+        if self._subscribed_stream_id is not None:
+            logger.info("Already subscribed to stream %s, ignoring stream %s", self._subscribed_stream_id, stream.id)
+            return
+        self._subscribed_stream_id = stream.id
         success = self.client.subscribe(
             stream=stream,
             settings=SubscriberSettings(
@@ -184,6 +189,9 @@ class VonageVideoEchoServer:
 
     def on_stream_dropped(self, session: Session, stream: Stream) -> None:
         logger.info("Stream dropped: session_id=%s stream_id=%s", session.id, stream.id)
+        if self._subscribed_stream_id == stream.id:
+            logger.info("Subscribed stream dropped, ready to subscribe to the next available stream")
+            self._subscribed_stream_id = None
 
     def on_connection_created(self, session: Session, connection: Connection) -> None:
         logger.info(
