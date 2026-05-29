@@ -8,4 +8,5 @@ dependencies = [
     "pydantic~=2.11.9",
     "setuptools~=80.9.0",
     "vonage-video-connector>=1.0.0",
+    "webrtcvad~=2.0.10",
 ]

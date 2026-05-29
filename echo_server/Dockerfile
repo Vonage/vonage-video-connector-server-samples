@@ -14,4 +14,4 @@ RUN pip install uv
 
 WORKDIR /app
 
-ENTRYPOINT ["sh", "-c", "uv sync && uv run python vonage_video_echo_server.py \"$@\"", "--"]
+ENTRYPOINT ["sh", "-c", "uv sync && uv run python \"$@\"", "--"]
