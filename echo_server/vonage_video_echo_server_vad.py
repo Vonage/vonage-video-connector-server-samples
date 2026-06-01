@@ -200,7 +200,11 @@ class VonageVideoVadEchoServer:
             logger.error("Failed to start publishing")
 
     def on_ready_for_audio(self, session: Session) -> None:
-        logger.info("Audio/video system ready, echo server is now active: session_id=%s", session.id)
+        # Fired when the audio capturer is started (maps to on_ready_to_publish in the
+        # C++ SDK, a misleading name).  There is no equivalent callback exposed for
+        # video; we start the video echo thread here as well since by this point the
+        # publisher pipeline is fully initialised.
+        logger.info("Audio system ready, starting echo server: session_id=%s", session.id)
         self.is_publishing = True
 
         self.audio_thread = threading.Thread(target=self.audio_echo_thread, daemon=False)
