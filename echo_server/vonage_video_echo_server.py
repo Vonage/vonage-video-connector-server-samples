@@ -140,9 +140,8 @@ class VonageVideoEchoServer:
 
         own_connection = self.client.get_connection()
         if own_connection:
-            logger.info("Own connection: id=%s creation_time=%s", own_connection.id, own_connection.creation_time)
+            logger.debug("Own connection: id=%s creation_time=%s", own_connection.id, own_connection.creation_time)
 
-        logger.info("Starting echo server publisher...")
         success = self.client.publish(
             settings=self.publisher_settings,
             on_error_cb=self.on_publisher_error,
@@ -157,7 +156,7 @@ class VonageVideoEchoServer:
         # C++ SDK, a misleading name).  There is no equivalent callback exposed for
         # video; we start the video echo thread here as well since by this point the
         # publisher pipeline is fully initialised.
-        logger.info("Audio system ready, starting echo server: session_id=%s", session.id)
+        logger.debug("Audio system ready, starting echo server: session_id=%s", session.id)
         self.is_publishing = True
 
         self.audio_thread = threading.Thread(target=self.audio_echo_thread, daemon=False)
@@ -173,7 +172,7 @@ class VonageVideoEchoServer:
     def on_stream_received(self, session: Session, stream: Stream) -> None:
         logger.info("Stream received: session_id=%s stream_id=%s", session.id, stream.id)
         if self._subscribed_stream_id is not None:
-            logger.info("Already subscribed to stream %s, ignoring stream %s", self._subscribed_stream_id, stream.id)
+            logger.debug("Already subscribed to stream %s, ignoring stream %s", self._subscribed_stream_id, stream.id)
             return
         self._subscribed_stream_id = stream.id
         success = self.client.subscribe(
@@ -194,11 +193,10 @@ class VonageVideoEchoServer:
     def on_stream_dropped(self, session: Session, stream: Stream) -> None:
         logger.info("Stream dropped: session_id=%s stream_id=%s", session.id, stream.id)
         if self._subscribed_stream_id == stream.id:
-            logger.info("Subscribed stream dropped, ready to subscribe to the next available stream")
             self._subscribed_stream_id = None
 
     def on_connection_created(self, session: Session, connection: Connection) -> None:
-        logger.info(
+        logger.debug(
             "Connection created: session_id=%s connection_id=%s creation_time=%s",
             session.id,
             connection.id,
@@ -209,7 +207,7 @@ class VonageVideoEchoServer:
         own_connection = self.client.get_connection()
         is_own = own_connection and connection.id == own_connection.id
         label = "OWN" if is_own else "OTHER"
-        logger.info(
+        logger.debug(
             "Connection dropped [%s]: session_id=%s connection_id=%s",
             label,
             session.id,
@@ -282,7 +280,7 @@ class VonageVideoEchoServer:
 
     def audio_echo_thread(self) -> None:
         """Drain the audio queue and send frames back to the session immediately."""
-        logger.info("Audio echo thread started")
+        logger.debug("Audio echo thread started")
 
         while not self._stop_event.is_set():
             try:
@@ -294,11 +292,11 @@ class VonageVideoEchoServer:
             except Exception:
                 logger.exception("Error injecting echo audio")
 
-        logger.info("Audio echo thread stopped")
+        logger.debug("Audio echo thread stopped")
 
     def video_echo_thread(self) -> None:
         """Drain the video queue and send frames back to the session immediately."""
-        logger.info("Video echo thread started")
+        logger.debug("Video echo thread started")
 
         while not self._stop_event.is_set():
             try:
@@ -311,7 +309,7 @@ class VonageVideoEchoServer:
             except Exception:
                 logger.exception("Error injecting video frame")
 
-        logger.info("Video echo thread stopped")
+        logger.debug("Video echo thread stopped")
 
     # ------------------------------------------------------------------
     # Lifecycle
