@@ -1,0 +1,38 @@
+echo_server/vonage_video_echo_server_vad.py
+  s_57f6a26416c121::t_aeba0ef3f64370 411,423
+  s_57f6a26416c121::t_ae93acd8c6d21a 190
+  s_57f6a26416c121::t_81fef64480aeb1 308
+  s_57f6a26416c121::t_8f4eec18af1fbc 222
+  s_57f6a26416c121::t_d4660a2d913c68 246,257
+  s_57f6a26416c121::t_e942a57e3d22e4 328
+  s_57f6a26416c121::t_163580ec6d1662 436
+  s_57f6a26416c121::t_82029392dd3e85 464
+  s_57f6a26416c121::t_fd75d59f0d96b8 206
+echo_server/vonage_video_echo_server.py
+  s_57f6a26416c121::t_a72a8e88aa267a 175
+  s_57f6a26416c121::t_d3db9b9a899eaa 199,210
+  s_57f6a26416c121::t_5e5a2c01224efe 159
+  s_57f6a26416c121::t_5913653036436a 283,295,299,312
+  s_57f6a26416c121::t_47aec7f19703ed 143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "8e60a4e7348878175595799465645fba6456b7b5",
+  "prompts": {},
+  "humans": {
+    "h_28235619bd7317": {
+      "author": "adidomenico <alessio.didomenico@vonage.com>"
+    }
+  },
+  "sessions": {
+    "s_57f6a26416c121": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1777b159bffeoGV715x8XKTCBo",
+        "model": "claude-sonnet-4.6"
+      },
+      "human_author": "adidomenico <alessio.didomenico@vonage.com>"
+    }
+  }
+}
