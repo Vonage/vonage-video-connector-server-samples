@@ -5,8 +5,8 @@ description = "Native SDK echo server example"
 readme = "README.md"
 requires-python = "~=3.13.0"
 dependencies = [
+    "numpy~=2.2.6",
     "pydantic~=2.11.9",
     "setuptools~=80.9.0",
     "vonage-video-connector>=1.0.0",
-    "webrtcvad~=2.0.10",
 ]

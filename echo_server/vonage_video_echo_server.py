@@ -8,7 +8,9 @@ import queue
 import signal
 import sys
 import threading
-from typing import Optional, cast
+from typing import Callable, Optional, cast
+
+import numpy as np
 
 import vonage_video_connector
 from vonage_video_connector.models import (
@@ -55,11 +57,19 @@ def read_session_info(session_info_arg: str) -> dict[str, str]:
 
 
 class VonageVideoEchoServer:
-    def __init__(self, session_info: dict[str, str]) -> None:
+    def __init__(
+        self,
+        session_info: dict[str, str],
+        shutdown_cb: Optional[Callable[[], None]] = None,
+    ) -> None:
         self.client = vonage_video_connector.VonageVideoClient()
         self.audio_thread: Optional[threading.Thread] = None
         self.video_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
+
+        # Called when the echo server decides to shut down on its own (e.g. the
+        # last participant left the session).  Lets main() unblock and run cleanup.
+        self._shutdown_cb = shutdown_cb
 
         # Simple pass-through queues: frames go in from callbacks, out to publisher.
         # No buffering or gating — echo happens immediately at the natural frame rate.
@@ -67,18 +77,28 @@ class VonageVideoEchoServer:
         self.video_queue: queue.Queue[VideoFrame] = queue.Queue()
 
         self.is_publishing: bool = False
+
+        # All streams currently present in the session, keyed by stream ID.
+        self._available_streams: dict[str, Stream] = {}
+        # The stream we are currently subscribed to (None if not yet subscribed).
         self._subscribed_stream_id: Optional[str] = None
+
+        # Publisher and subscriber both target 720p.  Frames that arrive at a
+        # different resolution (simulcast ramp-up or a 1080p-only publisher) are
+        # resized automatically so the publisher always receives the expected format.
+        self.video_resolution = VideoResolution(width=1280, height=720)
 
         # Build settings
         audio_settings = SessionAudioSettings(sample_rate=48000, number_of_channels=1)
-        self.video_resolution = VideoResolution(width=1280, height=720)
         video_publisher_settings = SessionVideoPublisherSettings(
             resolution=self.video_resolution,
             fps=30,
             format="YUV420P",
         )
         session_av_settings = SessionAVSettings(
-            audio_publisher=audio_settings, audio_subscribers_mix=audio_settings, video_publisher=video_publisher_settings
+            audio_publisher=audio_settings,
+            audio_subscribers_mix=audio_settings,
+            video_publisher=video_publisher_settings,
         )
         self.session_info = session_info
         self.session_settings = SessionSettings(
@@ -128,6 +148,81 @@ class VonageVideoEchoServer:
             format=video_frame.format,
         )
 
+    @staticmethod
+    def _resize_yuv_frame(video_frame: VideoFrame, target: VideoResolution) -> VideoFrame:
+        """Nearest-neighbour resize a YUV420P frame to *target* resolution.
+
+        Used to normalise frames that arrive at a different resolution than the
+        configured publisher resolution — for example during the browser's simulcast
+        ramp-up phase or when subscribing to a 1080p-only publisher.
+        """
+        src_w = video_frame.resolution.width
+        src_h = video_frame.resolution.height
+        dst_w = target.width
+        dst_h = target.height
+
+        buf = bytes(video_frame.frame_buffer)
+        y_size = src_w * src_h
+        uv_w, uv_h = src_w // 2, src_h // 2
+        uv_size = uv_w * uv_h
+
+        y = np.frombuffer(buf[:y_size], dtype=np.uint8).reshape(src_h, src_w)
+        u = np.frombuffer(buf[y_size : y_size + uv_size], dtype=np.uint8).reshape(uv_h, uv_w)
+        v = np.frombuffer(buf[y_size + uv_size :], dtype=np.uint8).reshape(uv_h, uv_w)
+
+        row_y = np.round(np.linspace(0, src_h - 1, dst_h)).astype(int)
+        col_y = np.round(np.linspace(0, src_w - 1, dst_w)).astype(int)
+        row_uv = np.round(np.linspace(0, uv_h - 1, dst_h // 2)).astype(int)
+        col_uv = np.round(np.linspace(0, uv_w - 1, dst_w // 2)).astype(int)
+
+        resized_buf = (
+            y[np.ix_(row_y, col_y)].tobytes()
+            + u[np.ix_(row_uv, col_uv)].tobytes()
+            + v[np.ix_(row_uv, col_uv)].tobytes()
+        )
+        return VideoFrame(
+            frame_buffer=memoryview(resized_buf).cast("B"),
+            resolution=target,
+            format=video_frame.format,
+        )
+
+    def _do_subscribe(self, stream: Stream) -> None:
+        """Subscribe to *stream* and record it as the current echo target."""
+        logger.info("Subscribing to stream %s", stream.id)
+        self._subscribed_stream_id = stream.id
+        success = self.client.subscribe(
+            stream=stream,
+            settings=SubscriberSettings(
+                video_settings=SubscriberVideoSettings(
+                    preferred_resolution=self.video_resolution,
+                )
+            ),
+            on_error_cb=self.on_subscriber_error,
+            on_connected_cb=self.on_subscriber_connected,
+            on_disconnected_cb=self.on_subscriber_disconnected,
+            on_render_frame_cb=self.on_video_frame,
+        )
+        if not success:
+            logger.error("Failed to subscribe to stream %s", stream.id)
+            self._subscribed_stream_id = None
+
+    def _flush_video_queue(self) -> None:
+        """Discard all frames currently waiting in the video queue.
+
+        Called when switching echo targets so that stale frames from the
+        previous stream do not bleed into the new one.
+        """
+        while True:
+            try:
+                self.video_queue.get_nowait()
+            except queue.Empty:
+                break
+
+    def _trigger_shutdown(self) -> None:
+        """Request a graceful shutdown from the main thread."""
+        if self._shutdown_cb:
+            self._shutdown_cb()
+
     # ------------------------------------------------------------------
     # Session callbacks
     # ------------------------------------------------------------------
@@ -152,10 +247,6 @@ class VonageVideoEchoServer:
             logger.error("Failed to start publishing")
 
     def on_ready_for_audio(self, session: Session) -> None:
-        # Fired when the audio capturer is started (maps to on_ready_to_publish in the
-        # C++ SDK, a misleading name).  There is no equivalent callback exposed for
-        # video; we start the video echo thread here as well since by this point the
-        # publisher pipeline is fully initialised.
         logger.debug("Audio system ready, starting echo server: session_id=%s", session.id)
         self.is_publishing = True
 
@@ -168,32 +259,33 @@ class VonageVideoEchoServer:
     def on_session_disconnected(self, session: Session) -> None:
         logger.info("Session disconnected: session_id=%s", session.id)
         self.stop()
+        self._trigger_shutdown()
 
     def on_stream_received(self, session: Session, stream: Stream) -> None:
         logger.info("Stream received: session_id=%s stream_id=%s", session.id, stream.id)
+        self._available_streams[stream.id] = stream
         if self._subscribed_stream_id is not None:
-            logger.debug("Already subscribed to stream %s, ignoring stream %s", self._subscribed_stream_id, stream.id)
+            logger.debug("Already echoing stream %s, ignoring stream %s", self._subscribed_stream_id, stream.id)
             return
-        self._subscribed_stream_id = stream.id
-        success = self.client.subscribe(
-            stream=stream,
-            settings=SubscriberSettings(
-                video_settings=SubscriberVideoSettings(
-                    preferred_resolution=VideoResolution(width=1280, height=720),
-                )
-            ),
-            on_error_cb=self.on_subscriber_error,
-            on_connected_cb=self.on_subscriber_connected,
-            on_disconnected_cb=self.on_subscriber_disconnected,
-            on_render_frame_cb=self.on_video_frame,
-        )
-        if not success:
-            logger.error("Failed to subscribe to stream %s", stream.id)
+        self._do_subscribe(stream)
 
     def on_stream_dropped(self, session: Session, stream: Stream) -> None:
         logger.info("Stream dropped: session_id=%s stream_id=%s", session.id, stream.id)
-        if self._subscribed_stream_id == stream.id:
-            self._subscribed_stream_id = None
+        self._available_streams.pop(stream.id, None)
+
+        if self._subscribed_stream_id != stream.id:
+            return
+
+        self._subscribed_stream_id = None
+        self._flush_video_queue()
+
+        if self._available_streams:
+            next_stream = next(iter(self._available_streams.values()))
+            logger.info("Echo target dropped, switching to stream %s", next_stream.id)
+            self._do_subscribe(next_stream)
+        else:
+            logger.info("No more streams in session, shutting down echo server...")
+            self._trigger_shutdown()
 
     def on_connection_created(self, session: Session, connection: Connection) -> None:
         logger.debug(
@@ -247,16 +339,20 @@ class VonageVideoEchoServer:
     def on_video_frame(self, subscriber: Subscriber, video_frame: VideoFrame) -> None:
         """Receive a video frame and queue it for immediate echo.
 
-        Frames at the wrong resolution are discarded — the browser ramps up
-        through lower resolutions before settling at 1280x720 and C++ rejects
-        mismatched frames anyway.
+        If the frame arrives at a different resolution (e.g. during the browser's
+        simulcast ramp-up or from a 1080p-only publisher) it is resized to the
+        configured target resolution rather than discarded.
         """
         if not self.is_publishing:
             return
-        if video_frame.resolution.width != self.video_resolution.width or video_frame.resolution.height != self.video_resolution.height:
-            return
-        frame_copy = self._copy_video_frame(video_frame)
-        self.video_queue.put(frame_copy)
+        if (
+            video_frame.resolution.width != self.video_resolution.width
+            or video_frame.resolution.height != self.video_resolution.height
+        ):
+            frame = self._resize_yuv_frame(video_frame, self.video_resolution)
+        else:
+            frame = self._copy_video_frame(video_frame)
+        self.video_queue.put(frame)
 
     # ------------------------------------------------------------------
     # Publisher callbacks
@@ -383,9 +479,12 @@ def main() -> None:
     parser.add_argument("session_info", help="Path to JSON file with session info or direct JSON string")
     args = parser.parse_args()
 
-    echo_server = VonageVideoEchoServer(read_session_info(args.session_info))
-
     stop_event = threading.Event()
+
+    echo_server = VonageVideoEchoServer(
+        session_info=read_session_info(args.session_info),
+        shutdown_cb=stop_event.set,
+    )
 
     def handle_signal(sig: int, frame: object) -> None:
         sig_name = signal.Signals(sig).name
