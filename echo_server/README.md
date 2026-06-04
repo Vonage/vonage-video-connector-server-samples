@@ -1,6 +1,6 @@
 # Vonage Video Echo Server Example
 
-This example provides a simple echo server that connects to a Vonage Video session and echoes received audio and video back to the session in real time, frame by frame.
+This example provides a simple echo server that connects to a Vonage Video session and echoes received audio and video back (in black and white) to the session in real time, frame by frame.
 
 ## Pre-requisites
 

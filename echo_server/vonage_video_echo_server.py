@@ -186,6 +186,29 @@ class VonageVideoEchoServer:
             format=video_frame.format,
         )
 
+    @staticmethod
+    def _to_grayscale(video_frame: VideoFrame) -> VideoFrame:
+        """Strip colour from a YUV420P frame by setting U and V planes to neutral (128).
+
+        The Y (luminance) plane is left untouched — it already carries the full
+        grayscale image.  Setting Cb/Cr to 128 (the neutral chroma point) removes
+        all colour information, producing a black-and-white output.
+
+        This makes the echo server's stream visually distinct from all other
+        participants regardless of tile size or session layout.
+        """
+        w = video_frame.resolution.width
+        h = video_frame.resolution.height
+        y_size = w * h
+
+        buf = np.frombuffer(video_frame.frame_buffer, dtype=np.uint8).copy()
+        buf[y_size:] = 128  # neutralise U and V planes
+        return VideoFrame(
+            frame_buffer=memoryview(buf.tobytes()).cast("B"),
+            resolution=video_frame.resolution,
+            format=video_frame.format,
+        )
+
     def _do_subscribe(self, stream: Stream) -> None:
         """Subscribe to *stream* and record it as the current echo target."""
         logger.info("Subscribing to stream %s", stream.id)
@@ -352,6 +375,7 @@ class VonageVideoEchoServer:
             frame = self._resize_yuv_frame(video_frame, self.video_resolution)
         else:
             frame = self._copy_video_frame(video_frame)
+        frame = self._to_grayscale(frame)
         self.video_queue.put(frame)
 
     # ------------------------------------------------------------------
