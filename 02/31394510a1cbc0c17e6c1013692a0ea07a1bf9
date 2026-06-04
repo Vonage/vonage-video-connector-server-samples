@@ -1,0 +1,33 @@
+echo_server/README.md
+  s_57e8553066f18f::t_f7ce93270a0fe3 3,31
+echo_server/vonage_video_echo_server.py
+  s_57e8553066f18f::t_36b3721e20dab9 13
+  s_57e8553066f18f::t_d3c4289b37a270 60,64,99-101
+  s_57e8553066f18f::t_fd8e7295c880d6 348-355
+  s_57e8553066f18f::t_9c264f80cf5ae9 11,61-63,72-73,80,82,89,187-189,191-203,205-209,215-221,223-224,266,268,270,274-288,484-487
+  s_57e8553066f18f::t_fdaa652cd963d1 151-152,159-186,204,225
+  h_28235619bd7317 70-71,81,83,86-88,153-158,190,210-214,222,262,342-344
+echo_server/pyproject.toml
+  s_57e8553066f18f::t_36a211524b32cc 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "0231394510a1cbc0c17e6c1013692a0ea07a1bf9",
+  "prompts": {},
+  "humans": {
+    "h_28235619bd7317": {
+      "author": "adidomenico <alessio.didomenico@vonage.com>"
+    }
+  },
+  "sessions": {
+    "s_57e8553066f18f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_16e145fe5ffe0XmmdimiZCOn0k",
+        "model": "claude-sonnet-4.6"
+      },
+      "human_author": "adidomenico <alessio.didomenico@vonage.com>"
+    }
+  }
+}
