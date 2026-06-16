@@ -1,0 +1,30 @@
+pipecat_moondream/pyproject.toml
+  s_87ff854dc98db2::t_5d6b31cba7fc99 7
+  s_87ff854dc98db2::t_305d9833d08467 6
+pipecat_nova_sonic/pyproject.toml
+  s_87ff854dc98db2::t_5d6b31cba7fc99 10
+  s_87ff854dc98db2::t_8fd98e90c44dab 9
+echo_server/pyproject.toml
+  s_87ff854dc98db2::t_5d6b31cba7fc99 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "11654301f930b6aa489327cdc2d16a7ed54fe98a",
+  "prompts": {},
+  "humans": {
+    "h_28235619bd7317": {
+      "author": "adidomenico <alessio.didomenico@vonage.com>"
+    }
+  },
+  "sessions": {
+    "s_87ff854dc98db2": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_130075c71ffemBiwZp2gBu5wjL",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "adidomenico <alessio.didomenico@vonage.com>"
+    }
+  }
+}
