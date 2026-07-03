@@ -150,7 +150,11 @@ class VonageVideoEchoServer:
 
     @staticmethod
     def _resize_yuv_frame(video_frame: VideoFrame, target: VideoResolution) -> VideoFrame:
-        """Nearest-neighbour resize a YUV420P frame to *target* resolution.
+        """Nearest-neighbour resize a YUV420P frame to *target* resolution preserving aspect ratio.
+
+        The frame is scaled to fit within the target dimensions without distortion.
+        Black bars (letterbox/pillarbox) fill any remaining space so the output is
+        always exactly *target* resolution.
 
         Used to normalise frames that arrive at a different resolution than the
         configured publisher resolution — for example during the browser's simulcast
@@ -161,6 +165,12 @@ class VonageVideoEchoServer:
         dst_w = target.width
         dst_h = target.height
 
+        # Compute scaled dimensions that preserve aspect ratio.
+        scale = min(dst_w / src_w, dst_h / src_h)
+        # Ensure scaled dimensions are even (required for YUV420P chroma subsampling).
+        scaled_w = int(src_w * scale) & ~1
+        scaled_h = int(src_h * scale) & ~1
+
         buf = bytes(video_frame.frame_buffer)
         y_size = src_w * src_h
         uv_w, uv_h = src_w // 2, src_h // 2
@@ -170,16 +180,33 @@ class VonageVideoEchoServer:
         u = np.frombuffer(buf[y_size : y_size + uv_size], dtype=np.uint8).reshape(uv_h, uv_w)
         v = np.frombuffer(buf[y_size + uv_size :], dtype=np.uint8).reshape(uv_h, uv_w)
 
-        row_y = np.round(np.linspace(0, src_h - 1, dst_h)).astype(int)
-        col_y = np.round(np.linspace(0, src_w - 1, dst_w)).astype(int)
-        row_uv = np.round(np.linspace(0, uv_h - 1, dst_h // 2)).astype(int)
-        col_uv = np.round(np.linspace(0, uv_w - 1, dst_w // 2)).astype(int)
+        # Nearest-neighbour resize to the scaled (aspect-ratio-preserving) size.
+        row_y = np.round(np.linspace(0, src_h - 1, scaled_h)).astype(int)
+        col_y = np.round(np.linspace(0, src_w - 1, scaled_w)).astype(int)
+        row_uv = np.round(np.linspace(0, uv_h - 1, scaled_h // 2)).astype(int)
+        col_uv = np.round(np.linspace(0, uv_w - 1, scaled_w // 2)).astype(int)
 
-        resized_buf = (
-            y[np.ix_(row_y, col_y)].tobytes()
-            + u[np.ix_(row_uv, col_uv)].tobytes()
-            + v[np.ix_(row_uv, col_uv)].tobytes()
-        )
+        scaled_y = y[np.ix_(row_y, col_y)]
+        scaled_u = u[np.ix_(row_uv, col_uv)]
+        scaled_v = v[np.ix_(row_uv, col_uv)]
+
+        # Create black canvas (Y=0 is black, U=V=128 is neutral chroma).
+        out_y = np.zeros((dst_h, dst_w), dtype=np.uint8)
+        out_u = np.full((dst_h // 2, dst_w // 2), 128, dtype=np.uint8)
+        out_v = np.full((dst_h // 2, dst_w // 2), 128, dtype=np.uint8)
+
+        # Center the scaled frame on the canvas.
+        offset_x = (dst_w - scaled_w) // 2
+        offset_y = (dst_h - scaled_h) // 2
+        # Ensure offsets are even for chroma plane alignment.
+        offset_x &= ~1
+        offset_y &= ~1
+
+        out_y[offset_y : offset_y + scaled_h, offset_x : offset_x + scaled_w] = scaled_y
+        out_u[offset_y // 2 : offset_y // 2 + scaled_h // 2, offset_x // 2 : offset_x // 2 + scaled_w // 2] = scaled_u
+        out_v[offset_y // 2 : offset_y // 2 + scaled_h // 2, offset_x // 2 : offset_x // 2 + scaled_w // 2] = scaled_v
+
+        resized_buf = out_y.tobytes() + out_u.tobytes() + out_v.tobytes()
         return VideoFrame(
             frame_buffer=memoryview(resized_buf).cast("B"),
             resolution=target,
