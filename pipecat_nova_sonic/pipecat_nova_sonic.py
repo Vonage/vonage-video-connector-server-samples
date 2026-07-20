@@ -129,7 +129,9 @@ async def main(session_str: str) -> None:
             },
         ],
     )
-    user_aggregator, assistant_aggregator = LLMContextAggregatorPair(context)
+    user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
+        context, realtime_service_mode=False
+    )
 
     avatar: None | HeyGenVideoService = None
     async with aiohttp.ClientSession() as http_session:
