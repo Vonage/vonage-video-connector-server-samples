@@ -49,6 +49,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+for _noisy_logger in ("smithy_core", "smithy_aws_event_stream", "smithy_aws_core"):
+    logging.getLogger(_noisy_logger).setLevel(logging.WARNING)
+
 # Stock / demo avatar ID
 HEYGEN_AVATAR_ID = "513fd1b7-7ef9-466d-9af2-344e51eeb833"  # Ann Therapist
 
