@@ -1,0 +1,24 @@
+pipecat_moondream/README.md
+  s_ac932b7f2eaeed::t_cbbabf7b7bc65a 42,47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "d83d9a9232f32a5de3fca9dcb9b6cee42d310968",
+  "prompts": {},
+  "humans": {
+    "h_28235619bd7317": {
+      "author": "adidomenico <alessio.didomenico@vonage.com>"
+    }
+  },
+  "sessions": {
+    "s_ac932b7f2eaeed": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_057bcfb01ffe5F8zkc7pwiWLIh",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "adidomenico <alessio.didomenico@vonage.com>"
+    }
+  }
+}
