@@ -39,10 +39,12 @@ docker run --rm -it \
   -v .:/app \
   -v ./uv-cache:/root/.cache/uv \
   -v ./model-cache:/root/.cache/huggingface/hub \
+  -v vonage-moondream-venv:/app/.venv \
   pipecat-moondream "$(cat session.json)"
 ```
 
 The container will run `uv sync` at startup before launching the script. The mounted directories ensure that both Python dependencies and the Moondream model persist across runs and don't need to be re-downloaded each time.
+The named volume `vonage-moondream-venv` keeps the virtual environment inside Docker — this is required on macOS to avoid reusing a `.venv` built for the wrong platform (which otherwise surfaces as `ModuleNotFoundError` on native extensions such as `openai.types.chat` or `scipy`).
 
 ## What to Expect
 This example will subscribe to all the session's video streams and randomly select one frame from one of them,
