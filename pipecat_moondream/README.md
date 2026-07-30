@@ -39,6 +39,7 @@ docker run --rm -it \
   -v .:/app \
   -v ./uv-cache:/root/.cache/uv \
   -v ./model-cache:/root/.cache/huggingface/hub \
+  -v vonage-moondream-venv:/app/.venv \
   pipecat-moondream "$(cat session.json)"
 ```
 
