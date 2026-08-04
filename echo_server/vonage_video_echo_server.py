@@ -5,12 +5,12 @@ import json
 import logging
 import os
 import queue
+import signal
 import sys
 import threading
-from collections import deque
-from typing import Optional, cast
+from typing import Callable, Optional, cast
 
-from webrtcvad import Vad  # type: ignore[import-untyped]
+import numpy as np
 
 import vonage_video_connector
 from vonage_video_connector.models import (
@@ -24,8 +24,13 @@ from vonage_video_connector.models import (
     SessionAudioSettings,
     SessionAVSettings,
     SessionSettings,
+    SessionVideoPublisherSettings,
     Stream,
     Subscriber,
+    SubscriberSettings,
+    SubscriberVideoSettings,
+    VideoFrame,
+    VideoResolution,
 )
 
 logger = logging.getLogger(__name__)
@@ -52,28 +57,48 @@ def read_session_info(session_info_arg: str) -> dict[str, str]:
 
 
 class VonageVideoEchoServer:
-    # At 48 kHz mono with 10 ms frames the SDK delivers ~100 frames/sec.
-    # A threshold of 10 silent frames therefore equals roughly 100 ms of
-    # silence before speech is considered finished.
-    SILENCE_THRESHOLD: int = 10
-
-    def __init__(self, session_info: dict[str, str]) -> None:
+    def __init__(
+        self,
+        session_info: dict[str, str],
+        shutdown_cb: Optional[Callable[[], None]] = None,
+    ) -> None:
         self.client = vonage_video_connector.VonageVideoClient()
         self.audio_thread: Optional[threading.Thread] = None
+        self.video_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
+
+        # Called when the echo server decides to shut down on its own (e.g. the
+        # last participant left the session).  Lets main() unblock and run cleanup.
+        self._shutdown_cb = shutdown_cb
+
+        # Simple pass-through queues: frames go in from callbacks, out to publisher.
+        # No buffering or gating — echo happens immediately at the natural frame rate.
         self.audio_queue: queue.Queue[AudioData] = queue.Queue()
+        self.video_queue: queue.Queue[VideoFrame] = queue.Queue()
+
         self.is_publishing: bool = False
 
-        # VAD (Voice Activity Detection) related attributes
-        self.vad: Vad = Vad(2)  # Aggressiveness 0-3, higher = more aggressive
-        self.speech_frames: deque[AudioData] = deque()
-        self.is_speech_active: bool = False
-        self.silence_frames_count: int = 0
+        # All streams currently present in the session, keyed by stream ID.
+        self._available_streams: dict[str, Stream] = {}
+        # The stream we are currently subscribed to (None if not yet subscribed).
+        self._subscribed_stream_id: Optional[str] = None
+
+        # Publisher and subscriber both target 720p.  Frames that arrive at a
+        # different resolution (simulcast ramp-up or a 1080p-only publisher) are
+        # resized automatically so the publisher always receives the expected format.
+        self.video_resolution = VideoResolution(width=1280, height=720)
 
         # Build settings
         audio_settings = SessionAudioSettings(sample_rate=48000, number_of_channels=1)
+        video_publisher_settings = SessionVideoPublisherSettings(
+            resolution=self.video_resolution,
+            fps=30,
+            format="YUV420P",
+        )
         session_av_settings = SessionAVSettings(
-            audio_publisher=audio_settings, audio_subscribers_mix=audio_settings, video_publisher=None
+            audio_publisher=audio_settings,
+            audio_subscribers_mix=audio_settings,
+            video_publisher=video_publisher_settings,
         )
         self.session_info = session_info
         self.session_settings = SessionSettings(
@@ -84,7 +109,7 @@ class VonageVideoEchoServer:
         self.publisher_settings = PublisherSettings(
             name="Video Connector Example Echo Server",
             has_audio=True,
-            has_video=False,
+            has_video=True,
             audio_settings=PublisherAudioSettings(enable_stereo_mode=False, enable_opus_dtx=True),
         )
 
@@ -108,6 +133,146 @@ class VonageVideoEchoServer:
             number_of_frames=audio_data.number_of_frames,
         )
 
+    @staticmethod
+    def _copy_video_frame(video_frame: VideoFrame) -> VideoFrame:
+        """Create an independent copy of a VideoFrame.
+
+        The SDK may reuse the underlying buffer between callbacks, so we
+        must snapshot the pixel data before queuing it for later use.
+        """
+        buffer_copy = bytes(video_frame.frame_buffer)
+        mem_view = memoryview(buffer_copy).cast("B")
+        return VideoFrame(
+            frame_buffer=mem_view,
+            resolution=video_frame.resolution,
+            format=video_frame.format,
+        )
+
+    @staticmethod
+    def _resize_yuv_frame(video_frame: VideoFrame, target: VideoResolution) -> VideoFrame:
+        """Nearest-neighbour resize a YUV420P frame to *target* resolution preserving aspect ratio.
+
+        The frame is scaled to fit within the target dimensions without distortion.
+        Black bars (letterbox/pillarbox) fill any remaining space so the output is
+        always exactly *target* resolution.
+
+        Used to normalise frames that arrive at a different resolution than the
+        configured publisher resolution — for example during the browser's simulcast
+        ramp-up phase or when subscribing to a 1080p-only publisher.
+        """
+        src_w = video_frame.resolution.width
+        src_h = video_frame.resolution.height
+        dst_w = target.width
+        dst_h = target.height
+
+        # Compute scaled dimensions that preserve aspect ratio.
+        scale = min(dst_w / src_w, dst_h / src_h)
+        # Ensure scaled dimensions are even (required for YUV420P chroma subsampling).
+        scaled_w = int(src_w * scale) & ~1
+        scaled_h = int(src_h * scale) & ~1
+
+        buf = bytes(video_frame.frame_buffer)
+        y_size = src_w * src_h
+        uv_w, uv_h = src_w // 2, src_h // 2
+        uv_size = uv_w * uv_h
+
+        y = np.frombuffer(buf[:y_size], dtype=np.uint8).reshape(src_h, src_w)
+        u = np.frombuffer(buf[y_size : y_size + uv_size], dtype=np.uint8).reshape(uv_h, uv_w)
+        v = np.frombuffer(buf[y_size + uv_size :], dtype=np.uint8).reshape(uv_h, uv_w)
+
+        # Nearest-neighbour resize to the scaled (aspect-ratio-preserving) size.
+        row_y = np.round(np.linspace(0, src_h - 1, scaled_h)).astype(int)
+        col_y = np.round(np.linspace(0, src_w - 1, scaled_w)).astype(int)
+        row_uv = np.round(np.linspace(0, uv_h - 1, scaled_h // 2)).astype(int)
+        col_uv = np.round(np.linspace(0, uv_w - 1, scaled_w // 2)).astype(int)
+
+        scaled_y = y[np.ix_(row_y, col_y)]
+        scaled_u = u[np.ix_(row_uv, col_uv)]
+        scaled_v = v[np.ix_(row_uv, col_uv)]
+
+        # Create black canvas (Y=0 is black, U=V=128 is neutral chroma).
+        out_y = np.zeros((dst_h, dst_w), dtype=np.uint8)
+        out_u = np.full((dst_h // 2, dst_w // 2), 128, dtype=np.uint8)
+        out_v = np.full((dst_h // 2, dst_w // 2), 128, dtype=np.uint8)
+
+        # Center the scaled frame on the canvas.
+        offset_x = (dst_w - scaled_w) // 2
+        offset_y = (dst_h - scaled_h) // 2
+        # Ensure offsets are even for chroma plane alignment.
+        offset_x &= ~1
+        offset_y &= ~1
+
+        out_y[offset_y : offset_y + scaled_h, offset_x : offset_x + scaled_w] = scaled_y
+        out_u[offset_y // 2 : offset_y // 2 + scaled_h // 2, offset_x // 2 : offset_x // 2 + scaled_w // 2] = scaled_u
+        out_v[offset_y // 2 : offset_y // 2 + scaled_h // 2, offset_x // 2 : offset_x // 2 + scaled_w // 2] = scaled_v
+
+        resized_buf = out_y.tobytes() + out_u.tobytes() + out_v.tobytes()
+        return VideoFrame(
+            frame_buffer=memoryview(resized_buf).cast("B"),
+            resolution=target,
+            format=video_frame.format,
+        )
+
+    @staticmethod
+    def _to_grayscale(video_frame: VideoFrame) -> VideoFrame:
+        """Strip colour from a YUV420P frame by setting U and V planes to neutral (128).
+
+        The Y (luminance) plane is left untouched — it already carries the full
+        grayscale image.  Setting Cb/Cr to 128 (the neutral chroma point) removes
+        all colour information, producing a black-and-white output.
+
+        This makes the echo server's stream visually distinct from all other
+        participants regardless of tile size or session layout.
+        """
+        w = video_frame.resolution.width
+        h = video_frame.resolution.height
+        y_size = w * h
+
+        buf = np.frombuffer(video_frame.frame_buffer, dtype=np.uint8).copy()
+        buf[y_size:] = 128  # neutralise U and V planes
+        return VideoFrame(
+            frame_buffer=memoryview(buf.tobytes()).cast("B"),
+            resolution=video_frame.resolution,
+            format=video_frame.format,
+        )
+
+    def _do_subscribe(self, stream: Stream) -> None:
+        """Subscribe to *stream* and record it as the current echo target."""
+        logger.info("Subscribing to stream %s", stream.id)
+        self._subscribed_stream_id = stream.id
+        success = self.client.subscribe(
+            stream=stream,
+            settings=SubscriberSettings(
+                video_settings=SubscriberVideoSettings(
+                    preferred_resolution=self.video_resolution,
+                )
+            ),
+            on_error_cb=self.on_subscriber_error,
+            on_connected_cb=self.on_subscriber_connected,
+            on_disconnected_cb=self.on_subscriber_disconnected,
+            on_render_frame_cb=self.on_video_frame,
+        )
+        if not success:
+            logger.error("Failed to subscribe to stream %s", stream.id)
+            self._subscribed_stream_id = None
+
+    def _flush_video_queue(self) -> None:
+        """Discard all frames currently waiting in the video queue.
+
+        Called when switching echo targets so that stale frames from the
+        previous stream do not bleed into the new one.
+        """
+        while True:
+            try:
+                self.video_queue.get_nowait()
+            except queue.Empty:
+                break
+
+    def _trigger_shutdown(self) -> None:
+        """Request a graceful shutdown from the main thread."""
+        if self._shutdown_cb:
+            self._shutdown_cb()
+
     # ------------------------------------------------------------------
     # Session callbacks
     # ------------------------------------------------------------------
@@ -120,9 +285,8 @@ class VonageVideoEchoServer:
 
         own_connection = self.client.get_connection()
         if own_connection:
-            logger.info("Own connection: id=%s creation_time=%s", own_connection.id, own_connection.creation_time)
+            logger.debug("Own connection: id=%s creation_time=%s", own_connection.id, own_connection.creation_time)
 
-        logger.info("Starting echo server publisher...")
         success = self.client.publish(
             settings=self.publisher_settings,
             on_error_cb=self.on_publisher_error,
@@ -133,32 +297,48 @@ class VonageVideoEchoServer:
             logger.error("Failed to start publishing")
 
     def on_ready_for_audio(self, session: Session) -> None:
-        logger.info("Audio system ready, echo server is now active: session_id=%s", session.id)
+        logger.debug("Audio system ready, starting echo server: session_id=%s", session.id)
         self.is_publishing = True
 
         self.audio_thread = threading.Thread(target=self.audio_echo_thread, daemon=False)
         self.audio_thread.start()
 
+        self.video_thread = threading.Thread(target=self.video_echo_thread, daemon=False)
+        self.video_thread.start()
+
     def on_session_disconnected(self, session: Session) -> None:
         logger.info("Session disconnected: session_id=%s", session.id)
         self.stop()
+        self._trigger_shutdown()
 
     def on_stream_received(self, session: Session, stream: Stream) -> None:
         logger.info("Stream received: session_id=%s stream_id=%s", session.id, stream.id)
-        success = self.client.subscribe(
-            stream=stream,
-            on_error_cb=self.on_subscriber_error,
-            on_connected_cb=self.on_subscriber_connected,
-            on_disconnected_cb=self.on_subscriber_disconnected,
-        )
-        if not success:
-            logger.error("Failed to subscribe to stream %s", stream.id)
+        self._available_streams[stream.id] = stream
+        if self._subscribed_stream_id is not None:
+            logger.debug("Already echoing stream %s, ignoring stream %s", self._subscribed_stream_id, stream.id)
+            return
+        self._do_subscribe(stream)
 
     def on_stream_dropped(self, session: Session, stream: Stream) -> None:
         logger.info("Stream dropped: session_id=%s stream_id=%s", session.id, stream.id)
+        self._available_streams.pop(stream.id, None)
+
+        if self._subscribed_stream_id != stream.id:
+            return
+
+        self._subscribed_stream_id = None
+        self._flush_video_queue()
+
+        if self._available_streams:
+            next_stream = next(iter(self._available_streams.values()))
+            logger.info("Echo target dropped, switching to stream %s", next_stream.id)
+            self._do_subscribe(next_stream)
+        else:
+            logger.info("No more streams in session, shutting down echo server...")
+            self._trigger_shutdown()
 
     def on_connection_created(self, session: Session, connection: Connection) -> None:
-        logger.info(
+        logger.debug(
             "Connection created: session_id=%s connection_id=%s creation_time=%s",
             session.id,
             connection.id,
@@ -169,7 +349,7 @@ class VonageVideoEchoServer:
         own_connection = self.client.get_connection()
         is_own = own_connection and connection.id == own_connection.id
         label = "OWN" if is_own else "OTHER"
-        logger.info(
+        logger.debug(
             "Connection dropped [%s]: session_id=%s connection_id=%s",
             label,
             session.id,
@@ -177,56 +357,15 @@ class VonageVideoEchoServer:
         )
 
     # ------------------------------------------------------------------
-    # Audio / VAD processing
+    # Audio processing
     # ------------------------------------------------------------------
 
     def on_audio_data(self, session: Session, audio_data: AudioData) -> None:
-        """Receive audio data and process with VAD for intelligent echoing."""
+        """Receive audio data and queue it for immediate echo."""
         if not self.is_publishing:
             return
-        self._process_audio_with_vad(audio_data)
-
-    def _process_audio_with_vad(self, audio_data: AudioData) -> None:
-        """Analyse incoming audio with VAD and buffer speech segments.
-
-        While speech is detected, frames are accumulated in an internal
-        buffer.  Once silence persists for ``SILENCE_THRESHOLD`` consecutive
-        frames the entire buffered utterance is queued for echo playback.
-        """
-        buffer_bytes = audio_data.sample_buffer.tobytes()
-
-        try:
-            is_speech = self.vad.is_speech(buffer_bytes, audio_data.sample_rate)
-        except ValueError:
-            logger.debug("VAD rejected frame (size=%d, rate=%d)", len(buffer_bytes), audio_data.sample_rate)
-            return
-
         frame_copy = self._copy_audio_frame(audio_data)
-
-        if is_speech:
-            self.silence_frames_count = 0
-            self.speech_frames.append(frame_copy)
-
-            if not self.is_speech_active:
-                self.is_speech_active = True
-                logger.info("Speech detected, buffering audio")
-            return
-
-        # Silence frame
-        if not self.is_speech_active:
-            return
-
-        self.silence_frames_count += 1
-        # Keep buffering silence to maintain natural timing
-        self.speech_frames.append(frame_copy)
-
-        if self.silence_frames_count >= self.SILENCE_THRESHOLD:
-            logger.info("Speech ended, queuing %d frames for echo", len(self.speech_frames))
-            for frame in self.speech_frames:
-                self.audio_queue.put(frame)
-            self.speech_frames.clear()
-            self.is_speech_active = False
-            self.silence_frames_count = 0
+        self.audio_queue.put(frame_copy)
 
     # ------------------------------------------------------------------
     # Subscriber callbacks
@@ -242,6 +381,29 @@ class VonageVideoEchoServer:
 
     def on_subscriber_disconnected(self, subscriber: Subscriber) -> None:
         logger.info("Subscriber disconnected: stream_id=%s", subscriber.stream.id)
+
+    # ------------------------------------------------------------------
+    # Video processing
+    # ------------------------------------------------------------------
+
+    def on_video_frame(self, subscriber: Subscriber, video_frame: VideoFrame) -> None:
+        """Receive a video frame and queue it for immediate echo.
+
+        If the frame arrives at a different resolution (e.g. during the browser's
+        simulcast ramp-up or from a 1080p-only publisher) it is resized to the
+        configured target resolution rather than discarded.
+        """
+        if not self.is_publishing:
+            return
+        if (
+            video_frame.resolution.width != self.video_resolution.width
+            or video_frame.resolution.height != self.video_resolution.height
+        ):
+            frame = self._resize_yuv_frame(video_frame, self.video_resolution)
+        else:
+            frame = self._copy_video_frame(video_frame)
+        frame = self._to_grayscale(frame)
+        self.video_queue.put(frame)
 
     # ------------------------------------------------------------------
     # Publisher callbacks
@@ -260,12 +422,12 @@ class VonageVideoEchoServer:
         self.stop()
 
     # ------------------------------------------------------------------
-    # Echo thread
+    # Echo threads
     # ------------------------------------------------------------------
 
     def audio_echo_thread(self) -> None:
-        """Drain the audio queue and send frames back to the session."""
-        logger.info("Echo thread started")
+        """Drain the audio queue and send frames back to the session immediately."""
+        logger.debug("Audio echo thread started")
 
         while not self._stop_event.is_set():
             try:
@@ -277,20 +439,43 @@ class VonageVideoEchoServer:
             except Exception:
                 logger.exception("Error injecting echo audio")
 
-        logger.info("Echo thread stopped")
+        logger.debug("Audio echo thread stopped")
+
+    def video_echo_thread(self) -> None:
+        """Drain the video queue and send frames back to the session immediately."""
+        logger.debug("Video echo thread started")
+
+        while not self._stop_event.is_set():
+            try:
+                frame = self.video_queue.get(timeout=0.01)
+            except queue.Empty:
+                continue
+            try:
+                if not self.client.add_video(frame):
+                    logger.warning("add_video() returned False — C++ buffer full, frame dropped")
+            except Exception:
+                logger.exception("Error injecting video frame")
+
+        logger.debug("Video echo thread stopped")
 
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
     def stop(self) -> None:
-        """Signal the echo thread to stop and wait for it to finish."""
+        """Signal the echo threads to stop and wait for them to finish."""
         if self.audio_thread and self.audio_thread.is_alive():
-            logger.info("Stopping echo thread...")
+            logger.info("Stopping echo threads...")
             self._stop_event.set()
             self.audio_thread.join(timeout=2.0)
             if self.audio_thread.is_alive():
-                logger.warning("Echo thread did not stop cleanly")
+                logger.warning("Audio echo thread did not stop cleanly")
+
+        if self.video_thread and self.video_thread.is_alive():
+            self._stop_event.set()
+            self.video_thread.join(timeout=2.0)
+            if self.video_thread.is_alive():
+                logger.warning("Video echo thread did not stop cleanly")
 
     def connect(self) -> bool:
         """Connect to the session and start the echo server."""
@@ -316,11 +501,11 @@ class VonageVideoEchoServer:
             logger.error("Failed to connect to session")
             return False
 
-        logger.info("Connected, echo server will echo back any received audio")
+        logger.info("Connected, echo server will echo back any received audio and video")
         return True
 
     def cleanup(self) -> None:
-        """Clean up resources."""
+        """Clean up resources and properly leave the session."""
         self.stop()
 
         logger.info("Stopping publishing...")
@@ -328,9 +513,11 @@ class VonageVideoEchoServer:
             logger.warning("Failed to stop publishing")
 
         if self.client.is_connected():
-            logger.info("Disconnecting...")
+            logger.info("Disconnecting from session...")
             if not self.client.disconnect():
                 logger.warning("Failed to disconnect")
+
+        logger.info("Echo server shut down.")
 
 
 def main() -> None:
@@ -339,21 +526,50 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
 
-    parser = argparse.ArgumentParser(description="Vonage Video Echo Server with Voice Activity Detection")
+    parser = argparse.ArgumentParser(description="Vonage Video Echo Server")
     parser.add_argument("session_info", help="Path to JSON file with session info or direct JSON string")
     args = parser.parse_args()
 
-    echo_server = VonageVideoEchoServer(read_session_info(args.session_info))
+    stop_event = threading.Event()
+
+    echo_server = VonageVideoEchoServer(
+        session_info=read_session_info(args.session_info),
+        shutdown_cb=stop_event.set,
+    )
+
+    def handle_signal(sig: int, frame: object) -> None:
+        sig_name = signal.Signals(sig).name
+        if stop_event.is_set():
+            # Already shutting down — force exit on repeated signal
+            logger.warning("Received %s again during cleanup, forcing exit...", sig_name)
+            os._exit(1)
+        logger.info("Received %s, shutting down echo server...", sig_name)
+        stop_event.set()
+
+    def stdin_listener() -> None:
+        """Block until Enter is pressed or stdin is closed, then trigger shutdown."""
+        try:
+            input()
+        except EOFError:
+            # stdin closed (e.g. non-interactive / detached container) — wait forever
+            stop_event.wait()
+            return
+        logger.info("Enter pressed, shutting down echo server...")
+        stop_event.set()
+
+    signal.signal(signal.SIGTERM, handle_signal)
+    signal.signal(signal.SIGINT, handle_signal)
+
+    # Daemon thread: listens for Enter key so the server also exits on Enter.
+    stdin_thread = threading.Thread(target=stdin_listener, daemon=True)
+    stdin_thread.start()
 
     try:
         if not echo_server.connect():
             sys.exit(1)
 
-        logger.info("Echo server running. Press Enter to stop...")
-        input()
-
-    except KeyboardInterrupt:
-        logger.info("Shutting down echo server...")
+        logger.info("Echo server running. Press Enter or Ctrl+C to stop...")
+        stop_event.wait()
 
     finally:
         echo_server.cleanup()
