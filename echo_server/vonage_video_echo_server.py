@@ -546,29 +546,14 @@ def main() -> None:
         logger.info("Received %s, shutting down echo server...", sig_name)
         stop_event.set()
 
-    def stdin_listener() -> None:
-        """Block until Enter is pressed or stdin is closed, then trigger shutdown."""
-        try:
-            input()
-        except EOFError:
-            # stdin closed (e.g. non-interactive / detached container) — wait forever
-            stop_event.wait()
-            return
-        logger.info("Enter pressed, shutting down echo server...")
-        stop_event.set()
-
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
-
-    # Daemon thread: listens for Enter key so the server also exits on Enter.
-    stdin_thread = threading.Thread(target=stdin_listener, daemon=True)
-    stdin_thread.start()
 
     try:
         if not echo_server.connect():
             sys.exit(1)
 
-        logger.info("Echo server running. Press Enter or Ctrl+C to stop...")
+        logger.info("Echo server running. Press Ctrl+C to stop...")
         stop_event.wait()
 
     finally:
