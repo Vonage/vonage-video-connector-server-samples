@@ -40,7 +40,7 @@ All commands below should be run from the `echo_server/` directory.
        "$(cat session.json)"
    ```
 
-4. To stop the server, press **Enter** or **Ctrl+C**. The container will disconnect from the session and exit.
+4. To stop the server, press **Ctrl+C**. The container will disconnect from the session and exit.
 
 ## How It Works
 
