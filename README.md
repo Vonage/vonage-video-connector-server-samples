@@ -16,10 +16,3 @@ This bundle provides examples using the `vonage_video_connector` module.
 
 > [!NOTE]
 > Each example has its own setup and run instructions — refer to the individual example folders for details.
-
-## Prerequisites
-
-- Python ~3.13 + [uv](https://docs.astral.sh/uv/) (for the Python samples)
-- Node.js 18.17 or later (for the Node.js Echo Server)
-- Docker (for the Pipecat examples and the Node.js Echo Server)
-- Access to a Vonage Video session
