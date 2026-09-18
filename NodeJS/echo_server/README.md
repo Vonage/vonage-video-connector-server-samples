@@ -18,8 +18,6 @@ Run these commands from the `NodeJS/` directory.
    docker build -t vonage-video-connector-nodejs-echo-server .
    ```
 
-   The image defaults to Node.js 22. Build with another supported version using `--build-arg NODE_IMAGE=node:20-bookworm-slim`.
-
 2. Create `session.json` with session credentials:
 
    ```json
