@@ -28,8 +28,8 @@
     "start": "npm run build && node dist/vonage_video_echo_server.js"
   },
   "dependencies": {
-    "@types/node": "20.11.0",
+    "@types/node": "^20.11.30",
     "@vonage/video-connector": "1.0.0",
-    "typescript": "5.4.0"
+    "typescript": "^5.4.5"
   }
 }
