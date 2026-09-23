@@ -10,7 +10,7 @@ This example connects to a Vonage Video session, echoes incoming audio, and repu
 
 ## Run with Docker
 
-Run these commands from the `NodeJS/` directory.
+Run these commands from the `nodejs/` directory.
 
 1. Build the image:
 
@@ -40,7 +40,7 @@ Run these commands from the `NodeJS/` directory.
 
 ## Run on a Linux Host
 
-From the `NodeJS/` directory, install the sample dependencies from npm and run the server:
+From the `nodejs/` directory, install the sample dependencies from npm and run the server:
 
 ```bash
 npm install --prefix echo_server
