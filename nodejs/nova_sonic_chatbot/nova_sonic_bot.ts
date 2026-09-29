@@ -22,9 +22,8 @@ import { NovaSonicClient, type EndpointingSensitivity } from './nova_sonic_clien
 import { VonageVideoTransport, log, type SessionInfo } from './vonage_video_transport.ts';
 
 // Nova Sonic accepts 8, 16 or 24 kHz mono input and produces the same rates on
-// output. 16 kHz in keeps the uplink small, 24 kHz out keeps the voice crisp and
-// is the only rate LiveAvatar accepts. The connector resamples the session audio
-// to match, so this file never does.
+// output. 16 kHz in keeps the uplink small, 24 kHz out keeps the voice crisp;
+// the connector resamples the session audio to match, so this file never does.
 const INPUT_SAMPLE_RATE: SampleRate = 16000;
 const OUTPUT_SAMPLE_RATE: SampleRate = 24000;
 const CHANNELS: NumberOfChannels = 1;
@@ -76,7 +75,10 @@ export class NovaSonicBot {
         onAudioReceived: (audio: Buffer) => this.novaSonic.sendAudio(audio),
         onReady: () => void this.startConversation(),
         onParticipantJoined: () => this.sendGreeting(),
-        onClosed: () => this.close(),
+        onClosed: () => {
+          this.stop();
+          this.markClosed();
+        },
       },
     );
 
@@ -86,7 +88,10 @@ export class NovaSonicBot {
       ? new HeyGenAvatar({
           onVideoFrame: (frame) => this.transport.playVideo(frame),
           onAudioFrame: (audio) => this.transport.playAudio(audio),
-          onClosed: () => this.close(),
+          onClosed: () => {
+            this.stop();
+            this.markClosed();
+          },
         })
       : null;
 
@@ -98,9 +103,9 @@ export class NovaSonicBot {
         systemPrompt: SYSTEM_PROMPT,
         inputSampleRate: INPUT_SAMPLE_RATE,
         outputSampleRate: OUTPUT_SAMPLE_RATE,
-        // An empty value omits the setting, for models that do not support it.
-        endpointingSensitivity: ((process.env.NOVA_SONIC_ENDPOINTING_SENSITIVITY ?? 'HIGH') ||
-          undefined) as EndpointingSensitivity | undefined,
+        endpointingSensitivity: (process.env.NOVA_SONIC_ENDPOINTING_SENSITIVITY ?? 'HIGH') as
+          | EndpointingSensitivity
+          | undefined,
       },
       {
         onAudioOutput: (audio: Buffer) =>
@@ -171,10 +176,5 @@ export class NovaSonicBot {
     this.transport.stop();
     this.novaSonic.stop();
     this.conversationStarted = false;
-  }
-
-  private close(): void {
-    this.stop();
-    this.markClosed();
   }
 }

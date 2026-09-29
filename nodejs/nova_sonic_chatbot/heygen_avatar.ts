@@ -12,15 +12,21 @@ import {
   type RemoteTrack,
 } from '@livekit/rtc-node';
 
-import { log, type Yuv420pFrame } from './vonage_video_transport.ts';
+import { log } from './vonage_video_transport.ts';
 
 const LIVE_AVATAR_API_URL = 'https://api.liveavatar.com';
 /** Stock demo avatar, matching the Python sample. Renders at 1280x720. */
 const DEFAULT_AVATAR_ID = '513fd1b7-7ef9-466d-9af2-344e51eeb833';
 
+/** A decoded avatar video frame, already in the connector's YUV420P layout. */
+interface AvatarVideoFrame {
+  data: Buffer;
+  width: number;
+  height: number;
+}
+
 interface HeyGenAvatarHandlers {
-  onVideoFrame: (frame: Yuv420pFrame) => void;
-  /** Avatar speech, PCM16 mono at 48 kHz, in sync with the video frames. */
+  onVideoFrame: (frame: AvatarVideoFrame) => void;
   onAudioFrame: (audio: Buffer) => void;
   /** The avatar session ended on its own. */
   onClosed: () => void;
@@ -47,8 +53,7 @@ export class HeyGenAvatar {
 
   private readonly apiKey: string;
   private readonly avatarId: string;
-  private readonly handlers: HeyGenAvatarHandlers;
-  private readonly audioChunkSizeBytes: number;
+  private readonly eventHandlers: HeyGenAvatarHandlers;
 
   private sessionToken: string | null = null;
   private room: Room | null = null;
@@ -56,15 +61,16 @@ export class HeyGenAvatar {
   private keepAliveTimer: NodeJS.Timeout | null = null;
   private audioFlushTimer: NodeJS.Timeout | null = null;
   private pendingAudio: Buffer = Buffer.alloc(0);
+  private readonly audioChunkSizeBytes: number;
   private isStopped = false;
 
-  constructor(handlers: HeyGenAvatarHandlers) {
+  constructor(eventHandlers: HeyGenAvatarHandlers) {
     const apiKey = process.env.HEYGEN_API_KEY;
     if (!apiKey) throw new Error('HEYGEN_API_KEY is not set');
 
     this.apiKey = apiKey;
     this.avatarId = process.env.HEYGEN_AVATAR_ID ?? DEFAULT_AVATAR_ID;
-    this.handlers = handlers;
+    this.eventHandlers = eventHandlers;
     // PCM16 mono: 2 bytes per sample.
     this.audioChunkSizeBytes =
       (HeyGenAvatar.REQUIRED_SAMPLE_RATE * HeyGenAvatar.SPEAK_CHUNK_MS * 2) / 1000;
@@ -108,12 +114,12 @@ export class HeyGenAvatar {
 
   private async postLiveAvatarRequest(
     path: string,
-    authHeaders: Record<string, string>,
+    authorizationHeaders: Record<string, string>,
     body: unknown,
   ): Promise<Record<string, unknown>> {
     const response = await fetch(LIVE_AVATAR_API_URL + path, {
       method: 'POST',
-      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      headers: { ...authorizationHeaders, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
 
@@ -135,7 +141,7 @@ export class HeyGenAvatar {
     room.on(RoomEvent.Disconnected, () => {
       if (!this.isStopped) {
         log('warn', 'LiveAvatar LiveKit room disconnected');
-        this.handlers.onClosed();
+        this.eventHandlers.onClosed();
       }
     });
 
@@ -152,7 +158,7 @@ export class HeyGenAvatar {
         try {
           for await (const videoEvent of new VideoStream(track)) {
             const i420Frame = videoEvent.frame.convert(VideoBufferType.I420);
-            this.handlers.onVideoFrame({
+            this.eventHandlers.onVideoFrame({
               data: Buffer.from(i420Frame.data),
               width: i420Frame.width,
               height: i420Frame.height,
@@ -171,7 +177,7 @@ export class HeyGenAvatar {
               audioFrame.data.byteOffset,
               audioFrame.data.byteLength,
             );
-            this.handlers.onAudioFrame(audio);
+            this.eventHandlers.onAudioFrame(audio);
           }
         } catch (error) {
           if (!this.isStopped) log('error', 'Avatar audio stream error', error);
@@ -214,7 +220,7 @@ export class HeyGenAvatar {
     controlSocket.onclose = () => {
       if (!this.isStopped) {
         log('warn', 'LiveAvatar control socket closed');
-        this.handlers.onClosed();
+        this.eventHandlers.onClosed();
       }
     };
   }

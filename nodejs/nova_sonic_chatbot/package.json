@@ -1,7 +1,6 @@
 {
   "name": "@vonage/video-connector-nova-sonic-chatbot-sample",
   "version": "1.0.0",
-  "private": true,
   "description": "Vonage Video Connector chatbot using AWS Nova Sonic",
   "type": "module",
   "keywords": [
@@ -32,7 +31,7 @@
     "@vonage/video-connector": "1.0.0"
   },
   "devDependencies": {
-    "@types/node": "^22.18.0",
-    "typescript": "^5.8.0"
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
   }
 }
