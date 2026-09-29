@@ -12,8 +12,9 @@
 //   nova_sonic_bot.ts          configuration and wiring between the two sides
 //   vonage_video_transport.ts  Vonage Video Connector plumbing
 //   nova_sonic_client.ts       Bedrock bidirectional streaming protocol
+//   heygen_avatar.ts           Optional HeyGen LiveAvatar video layer
 //
-// See nova_sonic_bot.ts for the supported environment variables.
+// See README.md for the supported environment variables.
 
 import * as fs from 'fs';
 

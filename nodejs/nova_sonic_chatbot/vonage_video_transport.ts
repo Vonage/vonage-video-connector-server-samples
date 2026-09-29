@@ -67,8 +67,8 @@ export interface VideoPublishSettings {
   fps: number;
 }
 
-/** A raw YUV420P frame to publish. */
-export interface VideoFrameInput {
+/** A raw YUV420P video frame. */
+export interface Yuv420pFrame {
   data: Buffer;
   width: number;
   height: number;
@@ -87,8 +87,8 @@ export interface VonageVideoTransportHandlers {
 }
 
 export class VonageVideoTransport {
-  private static readonly AUDIO_TICK_INTERVAL = 10; // ms
-  private static readonly OUTPUT_FRAME_MS = 10;
+  /** Duration of each published audio frame, and the interval of the timer that sends them. */
+  private static readonly AUDIO_FRAME_MS = 10;
   /** Upper bound of speech queued in the publisher buffer. */
   private static readonly MAX_BUFFERED_MS = 200;
 
@@ -112,7 +112,7 @@ export class VonageVideoTransport {
 
     // PCM16: 2 bytes per sample per channel.
     this.outputFrameSamples =
-      (options.outputSampleRate * VonageVideoTransport.OUTPUT_FRAME_MS) / 1000;
+      (options.outputSampleRate * VonageVideoTransport.AUDIO_FRAME_MS) / 1000;
     this.outputFrameBytes = this.outputFrameSamples * options.channels * 2;
 
     // Requesting the rates the AI service uses lets the connector do the
@@ -169,7 +169,7 @@ export class VonageVideoTransport {
       return false;
     }
 
-    log('info', `Connected to session: session_id=${session?.sessionId}`);
+    log('info', `Connected to session: session_id=${session.sessionId}`);
     return true;
   }
 
@@ -198,6 +198,8 @@ export class VonageVideoTransport {
   /** Stop media output without leaving the session. */
   stop(): void {
     this.isReady = false;
+    this.inputBuffer = Buffer.alloc(0);
+    this.outputBuffer = Buffer.alloc(0);
     if (this.audioTimer) {
       clearInterval(this.audioTimer);
       this.audioTimer = null;
@@ -249,7 +251,7 @@ export class VonageVideoTransport {
    * Frames whose geometry differs from the configured publisher geometry are
    * dropped: the encoder is fixed at publish time and cannot switch mid-stream.
    */
-  playVideo(frame: VideoFrameInput): void {
+  playVideo(frame: Yuv420pFrame): void {
     const videoSettings = this.options.videoSettings;
     if (!videoSettings || !this.isReady) return;
 
@@ -300,7 +302,7 @@ export class VonageVideoTransport {
           numberOfFrames: this.outputFrameSamples,
         });
 
-        bufferedMs += VonageVideoTransport.OUTPUT_FRAME_MS;
+        bufferedMs += VonageVideoTransport.AUDIO_FRAME_MS;
       }
     } catch (error) {
       log('error', 'Error injecting audio', error);
@@ -310,13 +312,13 @@ export class VonageVideoTransport {
   // ── Session callbacks ───────────────────────────────────────────────
 
   private onReadyForAudio(session: Session): void {
-    log('info', `Audio system ready: session_id=${session?.sessionId}`);
+    log('info', `Audio system ready: session_id=${session.sessionId}`);
     this.isReady = true;
 
     if (!this.audioTimer) {
       this.audioTimer = setInterval(
         () => this.audioOutputTick(),
-        VonageVideoTransport.AUDIO_TICK_INTERVAL,
+        VonageVideoTransport.AUDIO_FRAME_MS,
       );
     }
 
@@ -336,8 +338,8 @@ export class VonageVideoTransport {
   }
 
   private async onStreamReceived(session: Session, stream: Stream): Promise<void> {
-    log('info', `Stream received: session_id=${session?.sessionId} stream_id=${stream?.streamId}`);
-    this.streams.add(stream?.streamId);
+    log('info', `Stream received: session_id=${session.sessionId} stream_id=${stream.streamId}`);
+    this.streams.add(stream.streamId);
 
     // Subscribing is what includes the stream in the mixed audio.
     const subscriber = await this.client.subscribe(stream, {
@@ -347,8 +349,8 @@ export class VonageVideoTransport {
     });
 
     if (!subscriber) {
-      log('error', `Failed to subscribe to stream ${stream?.streamId}`);
-      this.streams.delete(stream?.streamId);
+      log('error', `Failed to subscribe to stream ${stream.streamId}`);
+      this.streams.delete(stream.streamId);
       return;
     }
 
@@ -356,30 +358,30 @@ export class VonageVideoTransport {
   }
 
   private onStreamDropped(session: Session, stream: Stream): void {
-    log('info', `Stream dropped: session_id=${session?.sessionId} stream_id=${stream?.streamId}`);
-    this.streams.delete(stream?.streamId);
+    log('info', `Stream dropped: session_id=${session.sessionId} stream_id=${stream.streamId}`);
+    this.streams.delete(stream.streamId);
   }
 
   private onSessionError(session: Session, description: string, code: number): void {
-    log('error', `Session error: session_id=${session?.sessionId} desc=${description} code=${code}`);
+    log('error', `Session error: session_id=${session.sessionId} desc=${description} code=${code}`);
   }
 
   private onSessionDisconnected(session: Session): void {
-    log('info', `Session disconnected: session_id=${session?.sessionId}`);
+    log('info', `Session disconnected: session_id=${session.sessionId}`);
     this.handlers.onClosed();
   }
 
   private onConnectionCreated(session: Session, connection: Connection): void {
     log(
       'info',
-      `Connection created: session_id=${session?.sessionId} connection_id=${connection?.connectionId}`,
+      `Connection created: session_id=${session.sessionId} connection_id=${connection.connectionId}`,
     );
   }
 
   private onConnectionDropped(session: Session, connection: Connection): void {
     log(
       'info',
-      `Connection dropped: session_id=${session?.sessionId} connection_id=${connection?.connectionId}`,
+      `Connection dropped: session_id=${session.sessionId} connection_id=${connection.connectionId}`,
     );
   }
 
