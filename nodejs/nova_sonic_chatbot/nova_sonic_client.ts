@@ -15,6 +15,9 @@ import { NodeHttp2Handler } from '@smithy/node-http-handler';
 /** Endpointing sensitivity for Nova Sonic server-side turn detection. */
 export type EndpointingSensitivity = 'LOW' | 'MEDIUM' | 'HIGH';
 
+/** Speaker of a conversation turn. */
+export type Role = 'USER' | 'ASSISTANT' | 'SYSTEM';
+
 /** Configuration for a Nova Sonic conversation. */
 export interface NovaSonicOptions {
   /** AWS region hosting the Nova Sonic model. */
@@ -103,8 +106,9 @@ export class NovaSonicClient {
   private readonly encoder = new TextEncoder();
 
   private started = false;
-  private role = '';
-  private speculative = false;
+  /** Role and generation stage of the content block being received. */
+  private currentRole = '';
+  private isCurrentContentSpeculative = false;
 
   constructor(options: NovaSonicOptions, handlers: NovaSonicHandlers) {
     this.options = options;
@@ -113,8 +117,8 @@ export class NovaSonicClient {
       region: options.region,
       // Bidirectional streaming requires HTTP/2 with concurrent streams enabled.
       requestHandler: new NodeHttp2Handler({
-        requestTimeout: 300000,
-        sessionTimeout: 300000,
+        requestTimeout: 300_000,
+        sessionTimeout: 300_000,
         disableConcurrentStreams: false,
         maxConcurrentStreams: 20,
       }),
@@ -163,13 +167,13 @@ export class NovaSonicClient {
   /**
    * Send a text turn.
    *
-   * @param role - USER, ASSISTANT or SYSTEM.
+   * @param role - Speaker of the turn.
    * @param text - The text content.
    * @param interactive - True for text injected during the live audio turn
    *                      (e.g. a greeting trigger), false for history and
    *                      system instructions sent before the audio starts.
    */
-  sendTextTurn(role: string, text: string, interactive: boolean): void {
+  sendTextTurn(role: Role, text: string, interactive: boolean): void {
     if (!text) return;
 
     const contentName = randomUUID();
@@ -307,10 +311,10 @@ export class NovaSonicClient {
         if (!event) continue;
 
         if (event.contentStart) {
-          this.role = event.contentStart.role ?? this.role;
+          this.currentRole = event.contentStart.role ?? this.currentRole;
           // Each turn is emitted twice: once speculatively while the model is
           // still generating, then again as the final version.
-          this.speculative = this.isSpeculative(event.contentStart);
+          this.isCurrentContentSpeculative = this.isSpeculative(event.contentStart);
         } else if (event.audioOutput) {
           this.handlers.onAudioOutput(Buffer.from(event.audioOutput.content, 'base64'));
         } else if (event.textOutput) {
@@ -318,8 +322,8 @@ export class NovaSonicClient {
           // Barge-in is reported as a synthetic text payload, not as a transcript.
           if (text.includes('"interrupted"')) {
             this.handlers.onInterrupted();
-          } else if (!this.speculative) {
-            this.handlers.onTranscript(event.textOutput.role ?? this.role, text);
+          } else if (!this.isCurrentContentSpeculative) {
+            this.handlers.onTranscript(event.textOutput.role ?? this.currentRole, text);
           }
         }
       }
