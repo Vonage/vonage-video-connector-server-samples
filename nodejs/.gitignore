@@ -1,3 +1,4 @@
 node_modules/
 echo_server/node_modules/
 session.json
+env_file

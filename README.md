@@ -13,6 +13,7 @@ This bundle provides examples using the `vonage_video_connector` module.
 ### Node.js ([`nodejs/`](./nodejs/))
 
 - [Echo server](./nodejs/echo_server/): An example application that echoes audio and grayscale video in video sessions
+- [Nova Sonic chatbot with optional HeyGen AI Avatar](./nodejs/nova_sonic_chatbot/): An AI bot participant that converses with the session using AWS Nova Sonic speech-to-speech
 
 > [!NOTE]
 > Each example has its own setup and run instructions — refer to the individual example folders for details.

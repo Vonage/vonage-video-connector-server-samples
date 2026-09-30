@@ -1,0 +1,37 @@
+{
+  "name": "@vonage/video-connector-nova-sonic-chatbot-sample",
+  "version": "1.0.0",
+  "description": "Vonage Video Connector chatbot using AWS Nova Sonic",
+  "type": "module",
+  "keywords": [
+    "vonage",
+    "opentok",
+    "video",
+    "webrtc",
+    "realtime",
+    "bedrock",
+    "nova-sonic"
+  ],
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "scripts": {
+    "start": "node main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "3.1112.0",
+    "@livekit/rtc-node": "0.13.34",
+    "@smithy/node-http-handler": "4.11.2",
+    "@vonage/video-connector": "1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  }
+}
