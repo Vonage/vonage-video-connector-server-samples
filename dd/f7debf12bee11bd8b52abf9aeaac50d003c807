@@ -4,6 +4,12 @@ pipecat_nova_sonic/pyproject.toml
   s_41a6c4f6b3ef4e::t_408b3fb697effa 9
 pipecat_nova_sonic/pipecat_nova_sonic.py
   s_41a6c4f6b3ef4e::t_cecd2bb9595b5d 132-134
+python/pipecat_moondream/pyproject.toml
+  s_41a6c4f6b3ef4e::t_1ead41beac2f45 6
+python/pipecat_nova_sonic/pyproject.toml
+  s_41a6c4f6b3ef4e::t_408b3fb697effa 9
+python/pipecat_nova_sonic/pipecat_nova_sonic.py
+  s_41a6c4f6b3ef4e::t_cecd2bb9595b5d 132-134
 ---
 {
   "schema_version": "authorship/3.0.0",
