@@ -30,6 +30,7 @@ from pipecat.frames.frames import (
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineTask
+from pipecat.pipeline.worker import ProcessorUnusablePolicy
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.services.moondream.vision import MoondreamService
 from pipecat.services.piper.tts import PiperTTSService
@@ -277,7 +278,7 @@ async def main(session_str: str) -> None:
         ]
     )
 
-    task = PipelineTask(pipeline)
+    task = PipelineTask(pipeline, processor_unusable_policy=ProcessorUnusablePolicy.CANCEL)
 
     runner = PipelineRunner(handle_sigint=True, handle_sigterm=True)
 
