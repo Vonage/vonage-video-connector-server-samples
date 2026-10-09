@@ -1,0 +1,14 @@
+python/echo_server/pyproject.toml
+  h_28235619bd7317 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "3ab887b294459d1bb4dbc8793252a33f3af2319c",
+  "prompts": {},
+  "humans": {
+    "h_28235619bd7317": {
+      "author": "adidomenico <alessio.didomenico@vonage.com>"
+    }
+  }
+}
