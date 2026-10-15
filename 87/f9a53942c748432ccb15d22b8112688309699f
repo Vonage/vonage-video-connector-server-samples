@@ -1,0 +1,46 @@
+python/pipecat_weather_tool/README.md
+  h_28235619bd7317 59
+  s_7a6ec0fa798e1b::t_2e6f9efb3b8bdf 24-38,41-42
+  s_7a6ec0fa798e1b::t_cdc0bcdf143e27 93-96
+  s_7a6ec0fa798e1b::t_7c40ffe6fb6031 1-23,39-40,43-58,60-68,72-92
+  s_7a6ec0fa798e1b::t_fcf1b7f80ae915 69-71
+python/pipecat_weather_tool/pipecat_weather_tool.py
+  s_7a6ec0fa798e1b::t_7d0803e62f280d 273-293
+  s_7a6ec0fa798e1b::t_38de66261010b2 294-295
+  s_7a6ec0fa798e1b::t_5edeee9228d40f 245,253-261
+  s_7a6ec0fa798e1b::t_fe016a49629ec6 31-40
+  s_7a6ec0fa798e1b::t_1225a4bad5d4e0 228,236-244,246
+  s_7a6ec0fa798e1b::t_2a8023625b089b 28-30
+  s_7a6ec0fa798e1b::t_7f2fa07f50c763 41-43,225-227
+  s_7a6ec0fa798e1b::t_32fdca9a47a2fb 229-231,233-235
+  s_7a6ec0fa798e1b::t_ac3d193076ada0 247-252
+  s_7a6ec0fa798e1b::t_e28077ff864274 262-264,270-272
+  s_7a6ec0fa798e1b::t_c2357605211a50 296-298
+python/pipecat_weather_tool/pyproject.toml
+  s_7a6ec0fa798e1b::t_a3256f3b554dc4 9
+  s_7a6ec0fa798e1b::t_e533927f158aa0 1-8,11
+  s_7a6ec0fa798e1b::t_c542519665a3ce 10
+python/pipecat_weather_tool/Dockerfile
+  s_7a6ec0fa798e1b::t_dc652c839688fa 1-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "87f9a53942c748432ccb15d22b8112688309699f",
+  "prompts": {},
+  "humans": {
+    "h_28235619bd7317": {
+      "author": "adidomenico <alessio.didomenico@vonage.com>"
+    }
+  },
+  "sessions": {
+    "s_7a6ec0fa798e1b": {
+      "agent_id": {
+        "tool": "kiro",
+        "id": "sess_e3d8fae5-9482-40eb-80ae-e85f2b97c836",
+        "model": "auto"
+      },
+      "human_author": "adidomenico <alessio.didomenico@vonage.com>"
+    }
+  }
+}
