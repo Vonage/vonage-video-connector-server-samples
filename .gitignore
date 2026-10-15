@@ -1,0 +1,12 @@
+*.log
+uv.lock
+run*
+tavus_nova*
+session.json
+env_file
+tavus_audio*
+*/model-cache/*
+sts*
+*.onnx*
+*/.venv/*
+*creds.json
