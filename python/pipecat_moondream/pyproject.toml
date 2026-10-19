@@ -1,6 +1,6 @@
 [project]
 name = "pipecat_vonage_moondream_demo"
-version = "1.0.0"
+version = "0.3.0"
 requires-python = "~=3.13.0"
 dependencies = [
   "pipecat-ai[moondream,piper]==1.13.0",
