@@ -8,7 +8,7 @@ Set `HEYGEN_API_KEY` to publish a lip-synced [HeyGen LiveAvatar](https://docs.li
 
 - Docker
 - Node.js 22.18 or later, which runs the TypeScript entrypoint without a build step
-- Access to the `amazon.nova-2-sonic-v1:0` model in Amazon Bedrock
+- Access to the `amazon.nova-2-5-sonic` model in Amazon Bedrock
 - AWS credentials resolvable by the default AWS SDK provider chain
 - Access to a Vonage Video session
 
@@ -67,7 +67,7 @@ Run these commands from the `nodejs/nova_sonic_chatbot/` directory.
 | Variable | Default | Description |
 |---|---|---|
 | `AWS_REGION` | `us-east-1` | Region hosting the Nova Sonic model. `AWS_DEFAULT_REGION` also applies |
-| `NOVA_SONIC_MODEL_ID` | `amazon.nova-2-sonic-v1:0` | Bedrock model id |
+| `NOVA_SONIC_MODEL_ID` | `amazon.nova-2-5-sonic` | Bedrock model id |
 | `NOVA_SONIC_VOICE_ID` | `tiffany` | Output voice |
 | `NOVA_SONIC_GREETING` | `Tell me a fun fact!` | Prompt that makes the bot speak first. Set it to an empty string to stay silent |
 | `NOVA_SONIC_ENDPOINTING_SENSITIVITY` | `HIGH` | How quickly the model detects the end of a turn. `HIGH` responds fastest but can cut off slower speakers, `MEDIUM` is the setting AWS recommends, `LOW` waits longest |

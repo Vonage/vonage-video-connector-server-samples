@@ -115,8 +115,6 @@ async def main(session_str: str) -> None:
         access_key_id=os.getenv("AWS_ACCESS_KEY_ID", ""),
         region=os.getenv("AWS_REGION", ""),
         session_token=os.getenv("AWS_SESSION_TOKEN", ""),
-        # Pinned because 1.13.0 moves the default to Nova 2.5 Sonic, which is untested here.
-        model="amazon.nova-2-sonic-v1:0",
         voice_id="tiffany",
         params=ns_params,
     )

@@ -6,7 +6,7 @@
 //   AWS credentials                   Resolved by the default AWS SDK provider chain
 //                                     (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY /
 //                                     AWS_SESSION_TOKEN, shared config, or IAM role).
-//   NOVA_SONIC_MODEL_ID               Model id (default: amazon.nova-2-sonic-v1:0).
+//   NOVA_SONIC_MODEL_ID               Model id (default: amazon.nova-2-5-sonic).
 //   NOVA_SONIC_VOICE_ID               Output voice (default: tiffany).
 //   NOVA_SONIC_GREETING               Prompt used to make the bot speak first.
 //                                     Set to an empty string to stay silent.
@@ -93,7 +93,7 @@ export class NovaSonicBot {
     this.novaSonic = new NovaSonicClient(
       {
         region: process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? 'us-east-1',
-        modelId: process.env.NOVA_SONIC_MODEL_ID ?? 'amazon.nova-2-sonic-v1:0',
+        modelId: process.env.NOVA_SONIC_MODEL_ID ?? 'amazon.nova-2-5-sonic',
         voiceId: process.env.NOVA_SONIC_VOICE_ID ?? 'tiffany',
         systemPrompt: SYSTEM_PROMPT,
         inputSampleRate: INPUT_SAMPLE_RATE,
