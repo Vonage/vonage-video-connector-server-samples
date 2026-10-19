@@ -1,0 +1,16 @@
+python/pipecat_moondream/pyproject.toml
+  h_28235619bd7317 3
+python/pipecat_nova_sonic/pyproject.toml
+  h_28235619bd7317 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "864564d7633e956f8ade278367b4477c01a114b1",
+  "prompts": {},
+  "humans": {
+    "h_28235619bd7317": {
+      "author": "adidomenico <alessio.didomenico@vonage.com>"
+    }
+  }
+}
