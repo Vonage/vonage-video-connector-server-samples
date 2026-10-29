@@ -1,0 +1,35 @@
+{
+  "name": "@vonage/video-connector-echo-server-sample",
+  "version": "1.0.0",
+  "description": "Native SDK echo server example",
+  "files": [
+    "vonage_video_echo_server.ts",
+    "tsconfig.json",
+    "README.md",
+    "licenses/"
+  ],
+  "keywords": [
+    "vonage",
+    "opentok",
+    "video",
+    "webrtc",
+    "realtime"
+  ],
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node dist/vonage_video_echo_server.js"
+  },
+  "dependencies": {
+    "@types/node": "^20.11.30",
+    "@vonage/video-connector": "1.0.0",
+    "typescript": "^5.4.5"
+  }
+}

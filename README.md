@@ -4,15 +4,16 @@ This bundle provides examples using the `vonage_video_connector` module.
 
 ## What's Included
 
-- [Python Echo server](./echo_server/): An example application that demonstrates audio echoing in video sessions
-- [Pipecat with AWS Nova Sonic and optional HeyGen AI Avatar bot](./pipecat_nova_sonic/): Integration with Nova Sonic for an example of pipecat using Vonage to interact with an AWS Nova Sonic bot
-- [Pipecat with Moondream live video analysis](./pipecat_moondream/): Integration with Moondream for live video analysis using Vonage Video sessions. Moondream descriptions are read aloud into the session using Piper TTS.
+### Python ([`python/`](./python/))
+
+- [Echo server](./python/echo_server/): An example application that demonstrates audio echoing in video sessions
+- [Pipecat with AWS Nova Sonic and optional HeyGen AI Avatar bot](./python/pipecat_nova_sonic/): Integration with Nova Sonic for an example of pipecat using Vonage to interact with an AWS Nova Sonic bot
+- [Pipecat with Moondream live video analysis](./python/pipecat_moondream/): Integration with Moondream for live video analysis using Vonage Video sessions. Moondream descriptions are read aloud into the session using Piper TTS.
+
+### Node.js ([`nodejs/`](./nodejs/))
+
+- [Echo server](./nodejs/echo_server/): An example application that echoes audio and grayscale video in video sessions
+- [Nova Sonic chatbot with optional HeyGen AI Avatar](./nodejs/nova_sonic_chatbot/): An AI bot participant that converses with the session using AWS Nova Sonic speech-to-speech
 
 > [!NOTE]
 > Each example has its own setup and run instructions — refer to the individual example folders for details.
-
-## Prerequisites
-
-- Python ~3.13 + [uv](https://docs.astral.sh/uv/) (for the Echo Server)
-- Docker (for the Pipecat examples)
-- Access to a Vonage Video session

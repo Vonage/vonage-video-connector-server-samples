@@ -24,13 +24,12 @@ from typing import Any, Callable
 
 import aiohttp
 
-from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import LLMRunFrame
 from pipecat.observers.loggers.transcription_log_observer import TranscriptionLogObserver
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
+from pipecat.pipeline.worker import ProcessorUnusablePolicy
 from pipecat.processors.aggregators.llm_context import LLMContext
 from pipecat.processors.aggregators.llm_response_universal import LLMContextAggregatorPair
 from pipecat.services.aws.nova_sonic.llm import AWSNovaSonicLLMService, Params as NovaSonicParams
@@ -90,7 +89,6 @@ async def main(session_str: str) -> None:
         VonageVideoConnectorTransportParams(
             audio_in_enabled=True,
             audio_out_enabled=True,
-            vad_analyzer=SileroVADAnalyzer(params=VADParams(start_secs=0.01, stop_secs=0.01)),
             publisher_name="TTS bot",
             audio_in_sample_rate=in_sr,
             audio_in_channels=chans,
@@ -156,7 +154,10 @@ async def main(session_str: str) -> None:
         )
 
         task = PipelineTask(
-            pipeline, params=PipelineParams(enable_metrics=True), observers=[TranscriptionLogObserver()]
+            pipeline,
+            params=PipelineParams(enable_metrics=True),
+            observers=[TranscriptionLogObserver()],
+            processor_unusable_policy=ProcessorUnusablePolicy.CANCEL,
         )
 
         # Handle client connection events
