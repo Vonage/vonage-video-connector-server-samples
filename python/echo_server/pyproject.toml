@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = "~=3.13.0"
 dependencies = [
     "numpy~=2.2.6",
-    "pydantic~=2.11.9",
+    "pydantic~=2.14.3",
     "setuptools~=80.9.0",
     "vonage-video-connector>=1.0.3",
 ]
